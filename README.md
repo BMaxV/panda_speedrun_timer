@@ -10,3 +10,5 @@ you have to do it in the script though.
 uses my panda interface glue to make the buttons / text / text entry, that's open source and MIT too and not too complicated, if you dont' want to install it, you can just inline the relevant functions.
 
 otherwise it just depends on panda and standard library stuff.
+
+![yo](screenshot.png)
