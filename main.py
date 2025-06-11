@@ -20,8 +20,18 @@ class SimpleSpeedrunTimer:
         self.z_spacing = 0.18
 
         pos = (-0.5, 0, -0.4)
-        self.main_time = pig.create_textline(f"0", pos)
+        
+        self.font = self.b.loader.loadFont("FreeMono.ttf")
+        
+        #path = pig.create_textline(my_text,(-1.2,0,0),card_color=(0.4,0.4,0.4,1),panda_font=font
+        self.main_time = pig.create_textline(f"0", pos,panda_font = self.font,card_color=(1,1,1,0),outline_color=(0.1,0.1,0.1,1),outline_geom=(0.5,0))
         self.main_time.setScale(0.15)
+        
+        self.decimals = 0
+        
+        self.font_name = "FreeMono.ttf"
+        
+        
         
     def main(self, *args):
         """this just updates the main clock"""
@@ -29,19 +39,59 @@ class SimpleSpeedrunTimer:
         if self.start_time == 0:
             my_text = "not started"
         else:
-            my_text = self.get_time_text(diff)
-        self.main_time.node().set_text(my_text)
+            my_text = self.get_time_text(diff,decimals = self.decimals)
+            self.main_time.node().set_text(my_text)
 
     def build_buttons(self):
         self.reset_button = pig.create_button(
             "reset", (-0.6, 0, -0.8), 0.05, self.reset, [])
         self.start_button = pig.create_button(
-            "start", (-0.0, 0, -0.8), 0.05, self.start, [])
+            "start/resume", (-0.0, 0, -0.8), 0.05, self.start_resume, [])
         self.split_button = pig.create_button(
             "split", (0.6, 0, -0.8), 0.05, self.split, [])
         self.split_button = pig.create_button(
             "save", (-0.6, 0, -0.9), 0.05, self.save, [])
+        self.enter_button = pig.create_button(
+            "enter time", (0, 0, -0.9), 0.05, self.start_entering_time, [])
+        
+        # this should not work and not be called, but if it is...
+        # idk, it gets a none error, not a... somethinng.
+        self.new_text_entry = None
+        self.confirm_button = None
+        
+    def start_entering_time(self,*args):
+        #p_dict = {"scale": (0.05, 0.05, 0.05)}
 
+        self.new_text_entry = pig.old_create_text_entry((-0.8,0,-0.7),0.05)
+        #self.new_text_entry.setPos(0,0,0.2)
+        self.confirm_button = pig.create_button(
+            "confirm", (0, 0, 0), 0.05, self.confirm_entering, [])
+        
+    def confirm_entering(self,*args):
+        my_text = self.new_text_entry.get()
+        my_time,success = self.time_enter_function(my_text)
+        #print(my_time)
+        if not success:
+            #self.main_time.set_text("entry failed")
+            self.main_time.node().set_text("entry failed")
+            
+        if success:
+            self.new_text_entry.destroy()
+            self.confirm_button.destroy()
+            self.new_text_entry = None
+            self.confirm_button = None
+            
+            time_text = self.get_time_text(my_time)
+            print(time_text)
+            self.main_time.node().set_text(time_text)
+            
+        self.start_time_diff = my_time
+        
+        
+            
+    def start_resume(self, *args):
+        self.start_time = time.time() - self.start_time_diff
+    
     def load_names(self):
         if "splitnamelist.txt" in os.listdir():
             with open("splitnamelist.txt", "r") as f:
@@ -60,6 +110,7 @@ class SimpleSpeedrunTimer:
         self.start_time = 0
         self.timing_UI = []
         self.split_c = 0
+        self.start_time_diff = 0
 
     def save(self, *args):
         """save timings to textfile"""
@@ -78,18 +129,18 @@ class SimpleSpeedrunTimer:
         with open("timings.csv", "w") as f:
             f.write(s)
         
-    def start(self, *args):
-        self.start_time = time.time()
 
     def reset(self, *args):
         self.timing_list = []
         for node in self.timing_UI:
             node.removeNode()
+        my_text = self.get_time_text(0,decimals = self.decimals)
+        self.main_time.node().set_text(my_text)
         self.timing_UI = []
         self.start_time = 0  # time.time()
         self.split_c = 0
 
-    def get_time_text(self, my_seconds):
+    def get_time_text(self, my_seconds,decimals = 2):
         """
         somehow **formatting time** for a stopwatch is a difficult,
         unsolved problem in python
@@ -99,20 +150,29 @@ class SimpleSpeedrunTimer:
         adding that is trivial if you want.
         """
         hours = int(my_seconds.__floordiv__(60*60))
+        hours = hours % 24
         hours = str(hours)
+        
         hours = hours.rjust(2, "0")
 
         minutes = int(my_seconds.__floordiv__(60))
+        minutes = minutes % 60
         minutes = str(minutes)
         minutes = minutes.rjust(2, "0")
 
-        seconds = my_seconds % 60
-        seconds = (str(round(seconds, 2)))
-        seconds = seconds.rjust(5, "0")
+        seconds = my_seconds % 60 # huh?
+        seconds = (str(round(seconds, decimals)))
+        number = max(3+decimals,4) #eh, 0.0 and 60.0 happens otherwise
+        seconds = seconds.rjust(number, "0")
+        
         my_text = f"{hours}:{minutes}:{seconds}"
 
         return my_text
-
+    
+    def manually_enter(self):
+        """set the time to go from e.g. a save and a set time."""
+        self.asdf=1
+    
     def delete_adjust(self):
 
         if len(self.timing_UI) > 5:
@@ -121,7 +181,36 @@ class SimpleSpeedrunTimer:
             for x in self.timing_UI:
                 pos = x.getPos()
                 x.setPos((pos[0], 0, pos[2]+self.z_spacing))
-
+    
+    def time_enter_function(self,my_time):
+        # it would be best if this would land me in a "paused" mode.
+        #try:
+        if True:
+            r = my_time.split(":")
+            assert len(r) == 3
+            #I'm assuming this is length 3, and
+            hours, minutes, seconds=r
+            
+            hours = int(hours)
+            minutes = int(minutes)
+            seconds = float(seconds)
+            print(hours, minutes, seconds)
+            min_totl = 60*hours+minutes
+            #minutes 
+            seconds += 60*min_totl#minutes
+            print(seconds)
+            print(self.get_time_text(seconds))
+            print("61",self.get_time_text(61))
+            print("61 minutes", self.get_time_text(60*61))
+            converted=self.get_time_text(seconds)
+            print([my_time,converted])
+        
+        #except:
+            #print('something went wrong')
+            #return 0, False 
+        return seconds, True
+        
+    
     def get_text(self):
         if self.split_c < len(self.name_list):
             text = self.name_list[self.split_c]
@@ -146,7 +235,8 @@ class SimpleSpeedrunTimer:
 
         full_text = f"{text} {time_text}"
         #full_text = full_text.ljust(50, " ")
-        new_element = pig.create_textline(full_text, pos)
+        new_element = pig.create_textline(full_text, pos,panda_font = self.font,card_color=(1,1,1,0),outline_color=(0.1,0.1,0.1,1),outline_geom=(0.5,0))
+        #main.py:23: self.timer = pig.create_textline(my_text,(-1.2,0,-0.5),card_color=(0.4,0.4,0.4,1),panda_font=font,outline_color=(0.1,0.1,0.1,1),outline_geom=(0.5,0))
         new_element.node().set_align(1)
 
         new_element.setScale(0.10)
