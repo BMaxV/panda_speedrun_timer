@@ -1,5 +1,8 @@
 import os
 import time
+import datetime
+
+from contextlib import contextmanager
 
 import panda3d
 from direct.showbase import ShowBase
@@ -7,8 +10,14 @@ from panda3d.core import WindowProperties
 
 from panda_interface_glue import panda_interface_glue as pig
 
+#def fake_exit():
+    #print("yo fake exit")
 
 class SimpleSpeedrunTimer:
+    """
+    uh... i somehow got around the concept of a running clock? hm.
+    
+    """
     def __init__(self, showbase):
         self.b = showbase
 
@@ -31,14 +40,43 @@ class SimpleSpeedrunTimer:
         
         self.font_name = "FreeMono.ttf"
         
+        self.try_auto_load()
+        
+        # other option to do some auto save thing.
+        # base.exitFunc = fake_exit
+        
+    def try_auto_load(self):
+        # maybe there is a config?
+        
+        names = os.listdir()
+        new_names = []
+        for name in names:
+            if name.startswith("auto"):
+                new_names.append(name)
+        
+        new_names.sort()
+        print(new_names)
+        fn=new_names[-1]
+        
+        # if this crashes, only because you messed with it.
+        #try:
+        self.load(fn)
+    
+        #except:
+        #    pri
+        
         
         
     def main(self, *args):
         """this just updates the main clock"""
+        # that is not accurate.
+        # that doesn't work.
         diff = time.time() - self.start_time
-        if self.start_time == 0:
+        
+        if self.clock_started == False:
             my_text = "not started"
         else:
+            print(diff)
             my_text = self.get_time_text(diff,decimals = self.decimals)
             self.main_time.node().set_text(my_text)
 
@@ -46,13 +84,17 @@ class SimpleSpeedrunTimer:
         self.reset_button = pig.create_button(
             "reset", (-0.6, 0, -0.8), 0.05, self.reset, [])
         self.start_button = pig.create_button(
-            "start/resume", (-0.0, 0, -0.8), 0.05, self.start_resume, [])
+            "start/resume", (-0.6, 0, -0.7), 0.05, self.start_resume, [])
         self.split_button = pig.create_button(
-            "split", (0.6, 0, -0.8), 0.05, self.split, [])
+            "split", (0.0, 0, -0.7), 0.05, self.split, [])
         self.split_button = pig.create_button(
             "save", (-0.6, 0, -0.9), 0.05, self.save, [])
         self.enter_button = pig.create_button(
             "enter time", (0, 0, -0.9), 0.05, self.start_entering_time, [])
+        self.enter_button = pig.create_button(
+            "pause", (0.6, 0, -0.7), 0.05, self.pause, [])
+        self.enter_button = pig.create_button(
+            "load options", (0.6, 0, -0.9), 0.05, self.show_load_options, [])
         
         # this should not work and not be called, but if it is...
         # idk, it gets a none error, not a... somethinng.
@@ -85,14 +127,24 @@ class SimpleSpeedrunTimer:
             print(time_text)
             self.main_time.node().set_text(time_text)
             
+            self.clock_timing_touched = True
+            
         self.start_time_diff = my_time
         
         
             
     def start_resume(self, *args):
-        self.start_time = time.time() - self.start_time_diff
-    
-    def load_names(self):
+        
+        if self.temp_stopped_clock_value == None:
+            
+            self.start_time = time.time() - self.start_time_diff
+        else:
+            self.start_time = time.time() - self.temp_stopped_clock_value
+            
+        self.clock_started = True
+        self.clock_timing_touched = True
+        
+    def load_names(self,*args):
         if "splitnamelist.txt" in os.listdir():
             with open("splitnamelist.txt", "r") as f:
                 t = f.read()
@@ -105,14 +157,21 @@ class SimpleSpeedrunTimer:
             self.name_list = ["make", "splitnamelist.txt", "in", "folder"]
 
     def zero_values(self):
-
+        
+        self.clock_started = False
+        
         self.timing_list = []
         self.start_time = 0
         self.timing_UI = []
         self.split_c = 0
         self.start_time_diff = 0
 
-    def save(self, *args):
+        # this is for...
+        self.clock_timing_touched = False
+        
+        self.temp_stopped_clock_value = None
+        
+    def save(self, fn_prefix="",*args):
         """save timings to textfile"""
         s = ""
         c = 0
@@ -125,11 +184,74 @@ class SimpleSpeedrunTimer:
                 name = "unnamed"
             s += f"{name};{self.timing_list[c]}\n"
             c += 1
-
-        with open("timings.csv", "w") as f:
-            f.write(s)
+        s += f"save_marker_automatic;{time.time()-self.start_time}\n"
         
+        time_string = datetime.datetime.now().isoformat()
+        print(time_string)
+        with open(fn_prefix+time_string+"timings.csv", "w") as f:
+            f.write(s)
+    
+    def pause(self,*args):
+        if self.clock_started:
+            stopped_clock_value = time.time() - self.start_time 
+            self.temp_stopped_clock_value = stopped_clock_value
+            self.clock_started = False
+    
+    def show_load_options(self,*args):
+        names = os.listdir()
+        new_names = []
+        for name in names:
+            if name.startswith("auto"):
+                new_names.append(name)
+        new_names.sort(reverse=True)
+        
+        c=0
+        self.temp_buttons = []
+        for name in new_names :
+            b = pig.create_button(name, (-0.0, 0, 0.8-c*self.z_spacing), 0.05, self.load_close, [name])
+            self.temp_buttons.append(b)
+            if c>10:
+                break
+            c+=1
+        b = pig.create_button("abort loading", (-0.0, 0, 0.8-c*self.z_spacing), 0.05, self.load_close, [name])
+        self.temp_buttons.append(b)
+        
+        fn=new_names[-1]
+        
+    def load_close(self,fn=None,*args):
+        if fn!=None:
+            self.load(fn)
+        for x in self.temp_buttons:
+            x.destroy()
+        self.temp_buttons=[]        
 
+    def load(self,fn):
+        
+        self.reset()
+        
+        with open(fn,"r") as f:
+            t= f.read()
+            t = t.split("\n")
+        while "" in t:
+            t.remove("")
+        lines = t
+        
+        #self.timings = 
+        for line in lines:
+            line = line.split(";")
+            name, time=line
+            print(time)
+            time=float(time)
+            
+            if name == "save_marker_automatic":
+                # is this correct?
+                self.start_time_diff = time
+                
+            else:
+                
+                self.timing_list.append(time)
+                self.make_timesplit_UI_element(time)
+        
     def reset(self, *args):
         self.timing_list = []
         for node in self.timing_UI:
@@ -138,7 +260,9 @@ class SimpleSpeedrunTimer:
         self.main_time.node().set_text(my_text)
         self.timing_UI = []
         self.start_time = 0  # time.time()
+        self.start_time_diff = 0
         self.split_c = 0
+        self.clock_started = False
 
     def get_time_text(self, my_seconds,decimals = 2):
         """
@@ -225,8 +349,17 @@ class SimpleSpeedrunTimer:
 
         if self.start_time == 0:
             self.start_time = time.time()
-        diff = time.time() - self.start_time
-        self.timing_list.append(diff)
+            
+        if self.clock_started:
+            diff = time.time() - self.start_time
+            
+            
+            # ok, so I am only recording the difference.
+            self.timing_list.append(diff)
+            self.make_timesplit_UI_element(diff)
+            self.clock_timing_touched = True
+        
+    def make_timesplit_UI_element(self, diff):
 
         m = len(self.timing_UI)
         pos = (0.5, 0, 0.8-m*self.z_spacing)
@@ -257,15 +390,31 @@ class Wrapper:
 
         self.SimpleSpeedrunTimer = SimpleSpeedrunTimer(self.b)
 
+# this is for autosave on quit.
+class MyContext:
+    
+    def __init__(self,GameControlObject,*args):
+        
+        self.gamecontrol=GameControlObject
+        
+    def __enter__(self):
+        return self
+        
+    def __exit__(self,*args):
+        if self.gamecontrol.clock_timing_touched:
+            self.gamecontrol.save(fn_prefix="auto")
+        # if you didn't do anything, don't make save.
+        return
+
 
 def main():
     W = Wrapper()
+    with MyContext(W.SimpleSpeedrunTimer):
+        while True:
+            delta_t = globalClock.dt
+            W.SimpleSpeedrunTimer.main(delta_t)
 
-    while True:
-        delta_t = globalClock.dt
-        W.SimpleSpeedrunTimer.main(delta_t)
-
-        W.b.taskMgr.step()
+            W.b.taskMgr.step()
 
 
 if __name__ == "__main__":
